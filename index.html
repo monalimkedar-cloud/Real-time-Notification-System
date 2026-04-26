@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Notification System</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a0a;
+      --surface: #111111;
+      --surface2: #1a1a1a;
+      --border: #2a2a2a;
+      --accent: #e8ff5a;
+      --accent2: #5affd6;
+      --danger: #ff5a5a;
+      --text: #f0f0f0;
+      --text-dim: #666;
+      --text-mid: #999;
+      --radius: 12px;
+      --font-head: 'Syne', sans-serif;
+      --font-mono: 'DM Mono', monospace;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-mono);
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      grid-template-rows: auto 1fr;
+    }
+
+    header {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 32px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .logo {
+      font-family: var(--font-head);
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(232,255,90,0.4); }
+      50% { box-shadow: 0 0 0 8px rgba(232,255,90,0); }
+    }
+
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+
+    .status-indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text-dim);
+      transition: background 0.3s;
+    }
+
+    .status-indicator.connected { background: var(--accent2); box-shadow: 0 0 6px var(--accent2); }
+    .status-indicator.disconnected { background: var(--danger); }
+
+    aside {
+      border-right: 1px solid var(--border);
+      background: var(--surface);
+      padding: 24px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .section-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--text-dim);
+      margin-bottom: 10px;
+    }
+
+    .login-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    label {
+      font-size: 11px;
+      color: var(--text-dim);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    input[type="text"] {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      padding: 10px 12px;
+      outline: none;
+      transition: border-color 0.2s;
+      width: 100%;
+    }
+
+    input[type="text"]:focus { border-color: var(--accent); }
+
+    .btn {
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: 8px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn-primary { background: var(--accent); color: #0a0a0a; }
+    .btn-primary:hover { background: #d4eb3f; transform: translateY(-1px); }
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--text-mid);
+      border: 1px solid var(--border);
+      margin-top: 6px;
+    }
+    .btn-ghost:hover { border-color: var(--danger); color: var(--danger); }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .stat-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 12px;
+      text-align: center;
+    }
+
+    .stat-value {
+  font-family: var(--font-head);
+  font-size: 32px;
+  font-weight: 800;
+  color: #ffffff;
+  line-height: 1;
+  text-shadow: 0 0 20px rgba(232,255,90,0.5);
+}
+
+    .stat-label {
+      font-size: 10px;
+      color: var(--text-dim);
+      margin-top: 4px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .send-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    select {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      padding: 10px 12px;
+      outline: none;
+      width: 100%;
+      cursor: pointer;
+    }
+
+    main {
+      padding: 28px 32px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .main-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .main-title {
+      font-family: var(--font-head);
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+    }
+
+    .badge {
+      background: var(--accent);
+      color: #0a0a0a;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 9px;
+      border-radius: 20px;
+      font-family: var(--font-mono);
+      display: none;
+    }
+
+    .badge.visible { display: inline-block; }
+
+    .actions { display: flex; gap: 10px; }
+
+    .btn-sm {
+      padding: 7px 14px;
+      font-size: 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-mid);
+      font-family: var(--font-mono);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn-sm:hover { border-color: var(--accent2); color: var(--accent2); }
+
+    .notif-list { display: flex; flex-direction: column; gap: 10px; }
+
+    .notif-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 18px;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 14px;
+      align-items: start;
+      animation: slideIn 0.3s ease;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+
+    .notif-card:hover { border-color: #333; }
+
+    .notif-card.unread { border-left: 3px solid var(--accent); }
+
+    .notif-card.unread::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, rgba(232,255,90,0.04) 0%, transparent 40%);
+      pointer-events: none;
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .notif-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 17px;
+      flex-shrink: 0;
+    }
+
+    .icon-message   { background: rgba(90,255,214,0.12); }
+    .icon-alert     { background: rgba(255,90,90,0.12); }
+    .icon-system    { background: rgba(232,255,90,0.12); }
+    .icon-promotion { background: rgba(180,90,255,0.12); }
+
+    .notif-body { min-width: 0; }
+
+    .notif-title {
+      font-family: var(--font-head);
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 3px;
+    }
+
+    .notif-card.read .notif-title { color: var(--text-dim); }
+
+    .notif-msg { font-size: 12px; color: var(--text-mid); line-height: 1.5; }
+    .notif-time { font-size: 10px; color: var(--text-dim); margin-top: 6px; }
+
+    .notif-meta {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
+    }
+
+    .type-badge {
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      padding: 2px 8px;
+      border-radius: 20px;
+      border: 1px solid;
+    }
+
+    .type-message   { color: var(--accent2); border-color: rgba(90,255,214,0.3); }
+    .type-alert     { color: var(--danger);  border-color: rgba(255,90,90,0.3); }
+    .type-system    { color: var(--accent);  border-color: rgba(232,255,90,0.3); }
+    .type-promotion { color: #c87aff;        border-color: rgba(200,122,255,0.3); }
+
+    .btn-read {
+      font-size: 10px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-dim);
+      font-family: var(--font-mono);
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+
+    .btn-read:hover { border-color: var(--accent2); color: var(--accent2); }
+    .btn-read.done  { opacity: 0.3; cursor: default; pointer-events: none; }
+
+    .empty-state { text-align: center; padding: 80px 20px; color: var(--text-dim); }
+    .empty-icon  { font-size: 48px; margin-bottom: 16px; opacity: 0.3; }
+    .empty-text  { font-family: var(--font-head); font-size: 18px; font-weight: 600; color: var(--text-mid); margin-bottom: 8px; }
+    .empty-sub   { font-size: 12px; }
+
+    #toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      z-index: 999;
+    }
+
+    .toast {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: var(--radius);
+      padding: 14px 18px;
+      min-width: 280px;
+      max-width: 340px;
+      animation: toastIn 0.3s ease;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+
+    .toast.alert-type   { border-left-color: var(--danger); }
+    .toast.message-type { border-left-color: var(--accent2); }
+
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateX(30px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+
+    @keyframes toastOut {
+      from { opacity: 1; transform: translateX(0); }
+      to   { opacity: 0; transform: translateX(30px); }
+    }
+
+    .toast-title { font-family: var(--font-head); font-size: 13px; font-weight: 700; margin-bottom: 3px; }
+    .toast-msg   { font-size: 11px; color: var(--text-mid); }
+
+    .not-connected-hint {
+      background: rgba(255,90,90,0.08);
+      border: 1px solid rgba(255,90,90,0.2);
+      border-radius: var(--radius);
+      padding: 12px 16px;
+      font-size: 12px;
+      color: var(--danger);
+      display: none;
+    }
+
+    .not-connected-hint.visible { display: block; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    NOTIFX
+  </div>
+  <div class="status-bar">
+    <div class="status-indicator" id="statusDot"></div>
+    <span id="statusText">Disconnected</span>
+  </div>
+</header>
+
+<aside>
+  <div>
+    <div class="section-label">User Session</div>
+    <div class="login-card">
+      <div class="input-group">
+        <label>User ID</label>
+        <input type="text" id="userIdInput" placeholder="e.g. user_123" />
+      </div>
+      <button class="btn btn-primary" id="connectBtn" onclick="connectUser()">Connect</button>
+      <button class="btn btn-ghost" id="disconnectBtn" onclick="disconnectUser()" style="display:none">Disconnect</button>
+    </div>
+  </div>
+
+  <div>
+    <div class="section-label">Stats</div>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value" id="totalCount">0</div>
+        <div class="stat-label">Total</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="unreadCount" style="color: #ffffff;">0</div>
+        <div class="stat-label">Unread</div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="section-label">Send Test Notification</div>
+    <div class="send-card">
+      <div class="input-group" style="margin-bottom:0">
+        <label>Target User ID</label>
+        <input type="text" id="targetUserId" placeholder="e.g. user_123" />
+      </div>
+      <div class="input-group" style="margin-bottom:0">
+        <label>Title</label>
+        <input type="text" id="notifTitle" placeholder="New Message" />
+      </div>
+      <div class="input-group" style="margin-bottom:0">
+        <label>Message</label>
+        <input type="text" id="notifMessage" placeholder="You have a new message" />
+      </div>
+      <div class="input-group" style="margin-bottom:0">
+        <label>Type</label>
+        <select id="notifType">
+          <option value="system">System</option>
+          <option value="message">Message</option>
+          <option value="alert">Alert</option>
+          <option value="promotion">Promotion</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" onclick="sendTestNotification()">Send →</button>
+    </div>
+  </div>
+</aside>
+
+<main>
+  <div class="main-header">
+    <div style="display:flex; align-items:center; gap:12px;">
+      <h1 class="main-title">Notifications</h1>
+      <span class="badge" id="unreadBadge">0</span>
+    </div>
+    <div class="actions">
+      <button class="btn-sm" onclick="markAllRead()">Mark all read</button>
+      <button class="btn-sm" onclick="loadNotifications()">↻ Refresh</button>
+    </div>
+  </div>
+
+  <div class="not-connected-hint" id="notConnectedHint">
+    ⚠ Connect with a User ID to start receiving real-time notifications.
+  </div>
+
+  <div class="notif-list" id="notifList">
+    <div class="empty-state">
+      <div class="empty-icon">🔔</div>
+      <div class="empty-text">No notifications yet</div>
+      <div class="empty-sub">Connect and send a test notification to get started</div>
+    </div>
+  </div>
+</main>
+
+<div id="toast-container"></div>
+
+<script>
+  const SERVER_URL = 'http://localhost:3000';
+  let socket = null;
+  let currentUserId = null;
+  let notifications = [];
+
+  const typeIcon  = { message: '💬', alert: '🚨', system: '⚙️', promotion: '🎁' };
+  const typeClass = { message: 'icon-message', alert: 'icon-alert', system: 'icon-system', promotion: 'icon-promotion' };
+
+  function connectUser() {
+    const userId = document.getElementById('userIdInput').value.trim();
+    if (!userId) return showToast('Enter a User ID first', '', 'alert');
+
+    currentUserId = userId;
+
+    socket = io(SERVER_URL, {
+      transports: ['websocket'],
+      query: { userId }  // matches server's socket.handshake.query.userId
+    });
+
+    socket.on('connect', () => {
+      setStatus(true);
+      document.getElementById('connectBtn').style.display = 'none';
+      document.getElementById('disconnectBtn').style.display = 'block';
+      document.getElementById('userIdInput').disabled = true;
+      document.getElementById('notConnectedHint').classList.remove('visible');
+      document.getElementById('targetUserId').value = userId;
+      loadNotifications();
+      showToast('Connected', `Listening as ${userId}`, 'system');
+    });
+
+    socket.on('notification', (notif) => {
+      notifications.unshift({ ...notif, isRead: false });
+      renderNotifications();
+      showToast(notif.title, notif.message, notif.type);
+    });
+
+    socket.on('disconnect', () => setStatus(false));
+  }
+
+  function disconnectUser() {
+    if (socket) socket.disconnect();
+    socket = null;
+    currentUserId = null;
+    notifications = [];
+    setStatus(false);
+    document.getElementById('connectBtn').style.display = 'block';
+    document.getElementById('disconnectBtn').style.display = 'none';
+    document.getElementById('userIdInput').disabled = false;
+    document.getElementById('notConnectedHint').classList.add('visible');
+    renderNotifications();
+  }
+
+  function setStatus(connected) {
+    const dot  = document.getElementById('statusDot');
+    const text = document.getElementById('statusText');
+    dot.className    = 'status-indicator ' + (connected ? 'connected' : 'disconnected');
+    text.textContent = connected ? `Online · ${currentUserId}` : 'Disconnected';
+  }
+
+  async function loadNotifications() {
+    if (!currentUserId) return;
+    try {
+      const res  = await fetch(`${SERVER_URL}/api/notifications/${currentUserId}`);
+      const data = await res.json();
+      if (data.success) { notifications = data.data; renderNotifications(); }
+    } catch (e) { showToast('Error', 'Could not load notifications', 'alert'); }
+  }
+
+  function renderNotifications() {
+    const list   = document.getElementById('notifList');
+    const unread = notifications.filter(n => !n.isRead).length;
+    const total  = notifications.length;
+
+    document.getElementById('totalCount').textContent  = total;
+    document.getElementById('unreadCount').textContent = unread;
+
+    const badge = document.getElementById('unreadBadge');
+    badge.textContent = unread;
+    badge.classList.toggle('visible', unread > 0);
+
+    if (total === 0) {
+      list.innerHTML = `<div class="empty-state">
+        <div class="empty-icon">🔔</div>
+        <div class="empty-text">No notifications yet</div>
+        <div class="empty-sub">Send a test notification to see it here</div>
+      </div>`;
+      return;
+    }
+
+    list.innerHTML = notifications.map(n => `
+      <div class="notif-card ${n.isRead ? 'read' : 'unread'}" id="card-${n._id}">
+        <div class="notif-icon ${typeClass[n.type] || 'icon-system'}">${typeIcon[n.type] || '🔔'}</div>
+        <div class="notif-body">
+          <div class="notif-title">${escHtml(n.title)}</div>
+          <div class="notif-msg">${escHtml(n.message)}</div>
+          <div class="notif-time">${formatTime(n.createdAt)}</div>
+        </div>
+        <div class="notif-meta">
+          <span class="type-badge type-${n.type}">${n.type}</span>
+          <button class="btn-read ${n.isRead ? 'done' : ''}" onclick="markRead('${n._id}')" ${n.isRead ? 'disabled' : ''}>
+            ${n.isRead ? '✓ read' : 'Mark read'}
+          </button>
+        </div>
+      </div>`).join('');
+  }
+
+  async function markRead(id) {
+    try {
+      const res  = await fetch(`${SERVER_URL}/api/notifications/${id}/read`, { method: 'PATCH' });
+      const data = await res.json();
+      if (data.success) {
+        const n = notifications.find(n => n._id === id);
+        if (n) n.isRead = true;
+        renderNotifications();
+      }
+    } catch (e) { showToast('Error', 'Could not mark as read', 'alert'); }
+  }
+
+  async function markAllRead() {
+    if (!currentUserId) return;
+    try {
+      await fetch(`${SERVER_URL}/api/notifications/${currentUserId}/read/all`, { method: 'PATCH' });
+      notifications.forEach(n => n.isRead = true);
+      renderNotifications();
+    } catch (e) { showToast('Error', 'Could not mark all as read', 'alert'); }
+  }
+
+  async function sendTestNotification() {
+    const userId  = document.getElementById('targetUserId').value.trim();
+    const title   = document.getElementById('notifTitle').value.trim();
+    const message = document.getElementById('notifMessage').value.trim();
+    const type    = document.getElementById('notifType').value;
+
+    if (!userId || !title || !message) return showToast('Fill all fields', 'Target User, Title and Message are required', 'alert');
+
+    try {
+      const res  = await fetch(`${SERVER_URL}/api/notifications/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, title, message, type })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('Sent!', `Notification dispatched to ${userId}`, 'system');
+        document.getElementById('notifTitle').value   = '';
+        document.getElementById('notifMessage').value = '';
+      }
+    } catch (e) { showToast('Error', 'Could not send notification', 'alert'); }
+  }
+
+  function showToast(title, msg, type = 'system') {
+    const el = document.createElement('div');
+    el.className = `toast ${type}-type`;
+    el.innerHTML = `<div class="toast-title">${escHtml(title)}</div><div class="toast-msg">${escHtml(msg)}</div>`;
+    document.getElementById('toast-container').appendChild(el);
+    setTimeout(() => {
+      el.style.animation = 'toastOut 0.3s ease forwards';
+      setTimeout(() => el.remove(), 300);
+    }, 3500);
+  }
+
+  function escHtml(str) {
+    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function formatTime(ts) {
+    if (!ts) return '';
+    const d    = new Date(ts);
+    const diff = Math.floor((new Date() - d) / 1000);
+    if (diff < 60)    return 'just now';
+    if (diff < 3600)  return `${Math.floor(diff/60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
+    return d.toLocaleDateString();
+  }
+
+  document.getElementById('notConnectedHint').classList.add('visible');
+</script>
+</body>
+</html>
